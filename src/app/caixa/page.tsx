@@ -79,16 +79,30 @@ export default function CaixaPage() {
     }
 
     async function fetchTransactions(registerId: string) {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('cash_transactions')
-            .select(`
-                *,
-                users:user_id (name)
-            `)
+            .select('*')
             .eq('cash_register_id', registerId)
             .order('created_at', { ascending: false });
 
-        if (data) setTransactions(data);
+        if (error) {
+            console.error("Erro ao buscar transações:", error);
+            return;
+        }
+
+        if (data) {
+            // Busca nomes dos funcionários separadamente para evitar erro de Foreign Key do auth.users
+            const userIds = [...new Set(data.map(t => t.user_id))];
+            if (userIds.length > 0) {
+                const { data: emps } = await supabase.from('employees').select('id, name').in('id', userIds);
+                if (emps) {
+                    data.forEach(t => {
+                        t.users = { name: emps.find(e => e.id === t.user_id)?.name || 'Desconhecido' };
+                    });
+                }
+            }
+            setTransactions(data);
+        }
     }
 
     async function handleOpenRegister(e: React.FormEvent) {
@@ -294,8 +308,8 @@ export default function CaixaPage() {
                                             <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="p-4">
                                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider ${t.type === 'Venda' ? 'bg-green-100 text-green-700' :
-                                                            t.type === 'Suprimento' ? 'bg-blue-100 text-blue-700' :
-                                                                'bg-red-100 text-red-700'
+                                                        t.type === 'Suprimento' ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-red-100 text-red-700'
                                                         }`}>
                                                         {t.type}
                                                     </span>
