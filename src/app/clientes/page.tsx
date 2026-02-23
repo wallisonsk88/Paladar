@@ -12,9 +12,13 @@ export default function ClientesPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+    const [selectedCustomerForPayment, setSelectedCustomerForPayment] = useState<Customer | null>(null);
     const [formData, setFormData] = useState({ name: '', phone: '', limit: '0', obs: '' });
+    const [paymentAmount, setPaymentAmount] = useState('');
     const [saving, setSaving] = useState(false);
+    const [processingPayment, setProcessingPayment] = useState(false);
 
     useEffect(() => {
         fetchCustomers();
@@ -77,6 +81,46 @@ export default function ClientesPage() {
             alert('Erro ao salvar cliente.');
         } finally {
             setSaving(false);
+        }
+    }
+
+    async function handleReceivePayment(e: React.FormEvent) {
+        e.preventDefault();
+        if (!selectedCustomerForPayment) return;
+
+        try {
+            setProcessingPayment(true);
+            const amount = parseFloat(paymentAmount.replace(',', '.'));
+
+            if (isNaN(amount) || amount <= 0) {
+                alert('Por favor, informe um valor válido.');
+                return;
+            }
+
+            if (amount > selectedCustomerForPayment.total_debt) {
+                alert('O valor informado é maior que a dívida atual.');
+                return;
+            }
+
+            const newDebt = selectedCustomerForPayment.total_debt - amount;
+
+            const { error } = await supabase
+                .from('customers')
+                .update({ total_debt: newDebt })
+                .eq('id', selectedCustomerForPayment.id);
+
+            if (error) throw error;
+
+            alert('Pagamento recebido com sucesso!');
+            setIsPaymentModalOpen(false);
+            setSelectedCustomerForPayment(null);
+            setPaymentAmount('');
+            fetchCustomers();
+        } catch (error) {
+            console.error('Error receiving payment:', error);
+            alert('Erro ao processar pagamento.');
+        } finally {
+            setProcessingPayment(false);
         }
     }
 
@@ -143,6 +187,11 @@ export default function ClientesPage() {
                                                 obs: customer.observations || ''
                                             });
                                             setIsModalOpen(true);
+                                        }}
+                                        onReceive={() => {
+                                            setSelectedCustomerForPayment(customer);
+                                            setIsPaymentModalOpen(true);
+                                            setPaymentAmount('');
                                         }}
                                     />
                                 ))
@@ -267,12 +316,63 @@ export default function ClientesPage() {
                         </Card>
                     </div>
                 )}
+
+                {isPaymentModalOpen && selectedCustomerForPayment && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-sm animate-in zoom-in-95 duration-200">
+                            <CardHeader>
+                                <CardTitle>Receber Pagamento</CardTitle>
+                            </CardHeader>
+                            <form onSubmit={handleReceivePayment}>
+                                <CardContent className="p-6 space-y-4">
+                                    <div className="bg-gray-50 p-4 rounded-xl mb-4 text-center">
+                                        <p className="text-sm text-gray-500 font-bold uppercase">Dívida de {selectedCustomerForPayment.name}</p>
+                                        <p className="text-3xl font-black text-red-600">
+                                            R$ {selectedCustomerForPayment.total_debt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Valor Recebido (R$)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            max={selectedCustomerForPayment.total_debt}
+                                            required
+                                            className="w-full px-4 py-3 text-lg font-bold border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+                                            placeholder="Ex: 50.00"
+                                            value={paymentAmount}
+                                            onChange={e => setPaymentAmount(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex gap-3 pt-4">
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            className="flex-1"
+                                            onClick={() => setIsPaymentModalOpen(false)}
+                                            disabled={processingPayment}
+                                        >
+                                            Cancelar
+                                        </Button>
+                                        <Button
+                                            type="submit"
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                            disabled={processingPayment || !paymentAmount}
+                                        >
+                                            {processingPayment ? 'Processando...' : 'Confirmar'}
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </form>
+                        </Card>
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
 }
 
-function CustomerCard({ customer, onEdit }: { customer: Customer, onEdit: () => void }) {
+function CustomerCard({ customer, onEdit, onReceive }: { customer: Customer, onEdit: () => void, onReceive: () => void }) {
     const isCloseToLimit = customer.total_debt >= (customer.credit_limit * 0.8);
 
     return (
@@ -295,7 +395,7 @@ function CustomerCard({ customer, onEdit }: { customer: Customer, onEdit: () => 
                     </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
+                <div className="bg-gray-50 rounded-lg p-3 flex justify-between items-center mb-3">
                     <div>
                         <p className="text-[10px] uppercase font-bold text-gray-400">Dívida Atual</p>
                         <p className={`text-lg font-black ${customer.total_debt > 0 ? "text-red-600" : "text-green-600"}`}>
@@ -310,8 +410,17 @@ function CustomerCard({ customer, onEdit }: { customer: Customer, onEdit: () => 
                     </div>
                 </div>
 
+                {customer.total_debt > 0 && (
+                    <Button
+                        onClick={(e) => { e.stopPropagation(); onReceive(); }}
+                        className="w-full bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 shadow-sm"
+                    >
+                        Receber Pagamento
+                    </Button>
+                )}
+
                 {isCloseToLimit && customer.total_debt > 0 && (
-                    <div className="mt-2 text-[10px] text-orange-600 font-bold flex items-center gap-1">
+                    <div className="mt-3 text-[10px] text-orange-600 font-bold flex items-center gap-1">
                         <AlertCircle size={10} />
                         CLIENTE PRÓXIMO AO LIMITE DE FIADO
                     </div>

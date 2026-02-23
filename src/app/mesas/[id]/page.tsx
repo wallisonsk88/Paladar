@@ -120,6 +120,18 @@ export default function MesaDetalhesPage() {
                     .update({ total_debt: (selectedCustomer.total_debt || 0) + totalAmount })
                     .eq('id', selectedCustomer.id);
                 if (custError) throw custError;
+
+                // Send WhatsApp receipt
+                if (selectedCustomer.phone) {
+                    const phone = selectedCustomer.phone.replace(/\D/g, '');
+                    const newDebt = (selectedCustomer.total_debt || 0) + totalAmount;
+                    let itemsText = orderItems.map(item => `- ${item.quantity}x ${item.product?.name} (R$ ${item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})`).join('%0A');
+
+                    const message = `Olá *${selectedCustomer.name}*, tudo bem?%0A%0AAqui é do *Novo Paladar*.%0A%0AInformamos que a sua conta de hoje foi fechada na nota.%0A%0A*Resumo do Pedido:*%0A${itemsText}%0A%0A*Total da Compra:* R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%0A*Seu saldo devedor atualizado:* R$ ${newDebt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%0A%0AAgradecemos a preferência!`;
+
+                    const whatsappUrl = `https://wa.me/55${phone}?text=${message}`;
+                    window.open(whatsappUrl, '_blank');
+                }
             }
 
             // 3. Update Table back to Livre
