@@ -31,6 +31,7 @@ export default function MesaDetalhesPage() {
     const [finalizing, setFinalizing] = useState(false);
     const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
 
     // Multi-Payment State
     const [paymentsList, setPaymentsList] = useState<PartialPayment[]>([]);
@@ -45,9 +46,12 @@ export default function MesaDetalhesPage() {
         try {
             setLoading(true);
 
-            // Fetch session context for cash register tracking
+            // Fetch session context for cash register tracking and permissions
             const { data: sessionData } = await supabase.auth.getSession();
-            if (sessionData.session) setUserId(sessionData.session.user.id);
+            if (sessionData.session) {
+                setUserId(sessionData.session.user.id);
+                setUserRole(sessionData.session.user.user_metadata?.role || 'garcom');
+            }
 
             // Fetch table
             const { data: tableData, error: tableError } = await supabase.from('tables').select('*').eq('id', id).single();
@@ -434,9 +438,13 @@ export default function MesaDetalhesPage() {
                             </CardContent>
                             {orderItems.length > 0 && (
                                 <div className="p-6 border-t bg-gray-50 flex justify-end">
-                                    <Button onClick={() => setIsClosing(true)} className="px-12 py-4 text-xl">
-                                        Fechar Mesa
-                                    </Button>
+                                    {(userRole === 'admin' || userRole === 'caixa') ? (
+                                        <Button onClick={() => setIsClosing(true)} className="px-12 py-4 text-xl">
+                                            Fechar Mesa
+                                        </Button>
+                                    ) : (
+                                        <p className="text-sm font-bold text-gray-400">Apenas Caixa pode fechar a mesa.</p>
+                                    )}
                                 </div>
                             )}
                         </Card>
