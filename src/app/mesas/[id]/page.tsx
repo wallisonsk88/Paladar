@@ -126,10 +126,9 @@ export default function MesaDetalhesPage() {
             const registerId = openRegister ? openRegister.id : null;
 
             // 1. Update the order to Paid
-            // Determine primary payment method name
-            const dominantMethod = paymentsList.length === 1
-                ? paymentsList[0].method
-                : 'Misto';
+            // Determine primary payment method name (Orders table CHECK constraint doesn't allow 'Misto')
+            const sortedPayments = [...paymentsList].sort((a, b) => b.amount - a.amount);
+            const dominantMethod = sortedPayments.length > 0 ? sortedPayments[0].method : 'Dinheiro';
 
             // If there's a Fiado payment, log the customer id of the FIRST Fiado 
             // (mainly for legacy support on the orders table. Best practice is to rely on debts table)

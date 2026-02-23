@@ -14,13 +14,11 @@ const supabaseKey = env['SUPABASE_SERVICE_ROLE_KEY'] || env['NEXT_PUBLIC_SUPABAS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function check() {
-    const { data: registers, error: regError } = await supabase.from('cash_registers').select('*').eq('status', 'Aberto');
-    console.log('Open Registers Error:', regError);
-    console.log('Open Registers:', registers);
-
-    const { data: txs, error: txError } = await supabase.from('cash_transactions').select('*');
-    console.log('Cash TXs Error:', txError);
-    console.log('Cash TXs count:', txs?.length);
-    if (txs?.length > 0) console.log('Last TX:', txs[txs.length - 1]);
+    const { data: order } = await supabase.from('orders').select('id, payment_method').limit(1).single();
+    if (order) {
+        console.log("Trying to update order:", order.id);
+        const { error } = await supabase.from('orders').update({ payment_method: 'Misto' }).eq('id', order.id);
+        console.log("Error updating to 'Misto':", error);
+    }
 }
 check();
